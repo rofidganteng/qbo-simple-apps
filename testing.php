@@ -7,10 +7,14 @@ use QuickBooksOnline\API\Core\Http\Serialization\XmlObjectSerializer;
 use QuickBooksOnline\API\Facades\Account;
 use QuickBooksOnline\API\Facades\Vendor;
 use QuickBooksOnline\API\Facades\Bill;
+use QuickBooksOnline\API\Facades\Item;
+
 session_start();
 $messages = [];
 $errors = [];
 $lineItems = [];
+
+$tenderboardAccount = null;
 
 function getDataService(){
     $accessToken = $_SESSION['sessionAccessToken'];
@@ -74,15 +78,41 @@ function createAccount($accountName){
     $accountObj = Account::create([
         "AccountType" => "Expense",
         "AccountSubType" => "Auto",
+        "SubAccount" => true,
         "Name" => $accountName
     ]);
     $accountResult = $dataService->Add($accountObj);
     return $accountResult;
 }
 
+function searchItem($itemName){
+    $dataService = getDataService();
+    $q = "select * from Item where Name like '%$itemName%'";
+    $data = $dataService->Query($q,0,1);
+    $error = $dataService->getLastError();
+    // Get Only First Result
+    if ($data && !$error)
+        return $data[0];
+}
+
+function createItem($itemName, $expenseAccount){
+    $dataService = getDataService();
+    $itemObj = [
+        "Name" => $itemName,
+        "Type" => "NonInventory",
+        "ExpenseAccountRef" => [
+          "value" => $expenseAccount->Id,
+        ],
+    ];
+    $theResourceObj = Item::create($itemObj);
+    $resultingObj = $dataService->Add($theResourceObj);
+    $error = $dataService->getLastError();
+    if($error) $errors[]=$error;
+    return $resultingObj;
+}
+
+
 function createBill($bill) {
-//     header('Content-Type: application/json');
-//     echo json_encode($bill);die;
     $dataService = getDataService();
     $theResourceObj = Bill::create($bill);
     $resultingObj = $dataService->Add($theResourceObj);
@@ -93,10 +123,15 @@ function createBill($bill) {
     return $resultingObj;
 }
 
+// Check Tenderboard Expense Account
+$tenderboardAccount = searchAccount('Tenderboard');
+if(!$tenderboardAccount) {
+    $tenderboardAccount = createAccount('Tenderboard');
+}
+
 // Check Vendor
 $vendorName = "mastereign visual arts pte ltd";
 $vendor = searchVendor($vendorName);
-
 if ($vendor) {
     // Vendor found. use vendorName
     $messages[] = "Vendor $vendorName Found<br>";
@@ -108,37 +143,38 @@ if ($vendor) {
     $messages[] = "Vendor". $vendor->CompanyName ."created <br>";
 }
 
-
-$items = [
-    ['description' => 'Redmi Note 5', 'amount' => 400],
-    ['description' => 'Samsung Galaxy Note 10', 'amount'=> 599]
-];
-
 // Check Item
-$messages[] = "- - - - - - - - - - - - - - - <br>";
-foreach($items as $item) {
-    $itemName = $item['description'];
-    $account = searchAccount($itemName);
-    if ($account) {
+$dummyItems = [
+    ['description' => 'Redmi Note 5', 'amount' => 499, 'qty'=> 1, 'price'=>400],
+    ['description' => 'Samsung Galaxy Note 10', 'amount'=> 299, 'qty'=> 1, 'price'=>288]
+];
+foreach($dummyItems as $dummyItem) {
+    $itemName = $dummyItem['description'];
+    $item = searchItem($itemName);
+    if ($item) {
         $messages[] = "Account/Description/Item $itemName Found <br>";
     } else {
         $messages[] = "Creating account $itemName <br>";
-        $account = createAccount($itemName);
+        $item = createItem($itemName, $tenderboardAccount);
         $messages[] = "Account $itemName Created <br>";
     }
-    // $lineItems[] = $account;
     $lineItems[] = [
-        "Amount" => $item['amount'],
-        "DetailType" => "AccountBasedExpenseLineDetail",
-        "AccountBasedExpenseLineDetail" =>
+        "Amount" => $dummyItem['amount'],
+        "DetailType" => "ItemBasedExpenseLineDetail",
+        "ItemBasedExpenseLineDetail" =>
         [
-            "AccountRef" =>
+            "ItemRef" =>
             [
-                "value" => $account->Id,
-            ]
+                "value" => $item->Id,
+            ],
+            "Qty" => $dummyItem['qty'],
+            "UnitPrice" => $dummyItem['price'],
         ]
     ];
 }
+
+// header('Content-Type: application/json');
+// echo json_encode($lineItems);die;
 
 // Push GR
 $billObject = [
@@ -157,5 +193,6 @@ $bill = createBill($billObject);
 header('Content-Type: application/json');
 echo json_encode([
     'errors'=> $errors,
+    'messages'=> $messages,
     'bill' => $bill
 ]);die;
