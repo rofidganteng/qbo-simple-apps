@@ -3,9 +3,17 @@
 require_once(__DIR__ . '/vendor/autoload.php');
 use QuickBooksOnline\API\DataService\DataService;
 
+// Debugbar
+use DebugBar\StandardDebugBar;
+$debugbar = new StandardDebugBar();
+$debugbarRenderer = $debugbar->getJavascriptRenderer();
+$debugbar["messages"]->addMessage("hello world!");
+
 $config = include('config.php');
 
 session_start();
+
+$accessToken = $_SESSION['sessionAccessToken'];
 
 $dataService = DataService::Configure(array(
     'auth_mode' => 'oauth2',
@@ -26,7 +34,11 @@ $_SESSION['authUrl'] = $authUrl;
 //set the access token using the auth object
 if (isset($_SESSION['sessionAccessToken'])) {
 
+    // $accessToken = unserialize($_SESSION['sessionAccessToken']);
     $accessToken = $_SESSION['sessionAccessToken'];
+
+
+
     $accessTokenJson = array('token_type' => 'bearer',
         'access_token' => $accessToken->getAccessToken(),
         'refresh_token' => $accessToken->getRefreshToken(),
@@ -43,6 +55,7 @@ if (isset($_SESSION['sessionAccessToken'])) {
 <!DOCTYPE html>
 <html>
 <head>
+    <?php echo $debugbarRenderer->renderHead() ?>
     <link rel="apple-touch-icon icon shortcut" type="image/png" href="https://plugin.intuitcdn.net/sbg-web-shell-ui/6.3.0/shell/harmony/images/QBOlogo.png">
     <script src="https://cdnjs.cloudflare.com/ajax/libs/jquery/2.1.4/jquery.min.js"></script>
     <link rel="stylesheet" href="https://netdna.bootstrapcdn.com/bootstrap/3.1.1/css/bootstrap.min.css">
@@ -151,5 +164,7 @@ if (isset($_SESSION['sessionAccessToken'])) {
     <hr />
 
 </div>
+
+<?php echo $debugbarRenderer->render() ?>
 </body>
 </html>

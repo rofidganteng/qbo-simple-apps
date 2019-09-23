@@ -31,6 +31,7 @@ function processCode()
     /*
      * Setting the accessToken for session variable
      */
+    // $_SESSION['sessionAccessToken'] = serialize($accessToken);
     $_SESSION['sessionAccessToken'] = $accessToken;
 }
 
